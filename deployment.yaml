@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: unit-converter
-          image: ramyareddy120/unit-converter:v1
+          image: ramyareddy120/unit-converter:v2
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
