@@ -42,6 +42,15 @@ pipeline {
                     powershell '''
                         $ErrorActionPreference = "Stop"
 
+                        Write-Host "Docker username: [$env:DOCKER_USER]"
+
+                        if ($null -eq $env:DOCKER_TOKEN) {
+                            Write-Host "Docker token is NULL"
+                            throw "Docker token was not supplied"
+                        }
+
+                        Write-Host "Docker token length: $($env:DOCKER_TOKEN.Length)"
+
                         $startInfo = New-Object System.Diagnostics.ProcessStartInfo
                         $startInfo.FileName = "docker"
                         $startInfo.Arguments = "login --username $env:DOCKER_USER --password-stdin"
