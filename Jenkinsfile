@@ -42,20 +42,38 @@ pipeline {
                     powershell '''
                         $ErrorActionPreference = "Stop"
 
-                        if ([string]::IsNullOrWhiteSpace($env:DOCKER_USER)) {
-                            throw "Docker username is empty"
+                        $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+                        $startInfo.FileName = "docker"
+                        $startInfo.Arguments = "login --username $env:DOCKER_USER --password-stdin"
+                        $startInfo.UseShellExecute = $false
+                        $startInfo.RedirectStandardInput = $true
+                        $startInfo.RedirectStandardOutput = $true
+                        $startInfo.RedirectStandardError = $true
+                        $startInfo.CreateNoWindow = $true
+
+                        $process = New-Object System.Diagnostics.Process
+                        $process.StartInfo = $startInfo
+
+                        [void]$process.Start()
+
+                        $process.StandardInput.WriteLine($env:DOCKER_TOKEN)
+                        $process.StandardInput.Close()
+
+                        $stdout = $process.StandardOutput.ReadToEnd()
+                        $stderr = $process.StandardError.ReadToEnd()
+
+                        $process.WaitForExit()
+
+                        if ($stdout) {
+                            Write-Host $stdout
                         }
 
-                        if ([string]::IsNullOrWhiteSpace($env:DOCKER_TOKEN)) {
-                            throw "Docker token is empty"
-                        }
-Write-Host "Docker username: [$env:DOCKER_USER]"
-Write-Host "Docker token length: $($env:DOCKER_TOKEN.Length)"
-                        $env:DOCKER_TOKEN | docker login --username $env:DOCKER_USER --password-stdin
-
-                        if ($LASTEXITCODE -ne 0) {
+                        if ($process.ExitCode -ne 0) {
+                            Write-Host $stderr
                             throw "Docker login failed"
                         }
+
+                        Write-Host "Docker login successful!"
 
                         docker push "$env:IMAGE_NAME`:$env:IMAGE_TAG"
 
