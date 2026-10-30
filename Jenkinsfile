@@ -30,71 +30,65 @@ pipeline {
             }
         }
 
-        stage('Push Docker Image') {
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerhub-finalnew',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_TOKEN'
+
+stage('Push Docker Image') {
+    steps {
+        withCredentials([
+            usernamePassword(
+                credentialsId: 'dockerhub-finalnew',
+                usernameVariable: 'DOCKER_USER',
+                passwordVariable: 'DOCKER_TOKEN'
+            )
+        ]) {
+            powershell '''
+                $ErrorActionPreference = "Stop"
+
+                $tokenFile = Join-Path $env:TEMP "jenkins-docker-token-$env:BUILD_NUMBER.txt"
+
+                try {
+                    $token = $env:DOCKER_TOKEN.Trim()
+
+                    [System.IO.File]::WriteAllText(
+                        $tokenFile,
+                        $token,
+                        [System.Text.Encoding]::ASCII
                     )
-                ]) {
-                    powershell '''
-                        $ErrorActionPreference = "Stop"
 
-                        Write-Host "Docker username: [$env:DOCKER_USER]"
+                    $loginArgs = @(
+                        "/c",
+                        "docker login --username `"$env:DOCKER_USER`" --password-stdin < `"$tokenFile`""
+                    )
 
-                        if ($null -eq $env:DOCKER_TOKEN) {
-                            Write-Host "Docker token is NULL"
-                            throw "Docker token was not supplied"
-                        }
+                    $process = Start-Process `
+                        -FilePath "cmd.exe" `
+                        -ArgumentList $loginArgs `
+                        -Wait `
+                        -PassThru `
+                        -NoNewWindow
 
-                        Write-Host "Docker token length: $($env:DOCKER_TOKEN.Length)"
+                    if ($process.ExitCode -ne 0) {
+                        throw "Docker Hub login failed"
+                    }
 
-                        $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-                        $startInfo.FileName = "docker"
-                        $startInfo.Arguments = "login --username $env:DOCKER_USER --password-stdin"
-                        $startInfo.UseShellExecute = $false
-                        $startInfo.RedirectStandardInput = $true
-                        $startInfo.RedirectStandardOutput = $true
-                        $startInfo.RedirectStandardError = $true
-                        $startInfo.CreateNoWindow = $true
+                    Write-Host "Docker login successful!"
 
-                        $process = New-Object System.Diagnostics.Process
-                        $process.StartInfo = $startInfo
+                    docker push "$env:IMAGE_NAME`:$env:IMAGE_TAG"
 
-                        [void]$process.Start()
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "Docker push failed"
+                    }
 
-                        $process.StandardInput.WriteLine($env:DOCKER_TOKEN)
-                        $process.StandardInput.Close()
-
-                        $stdout = $process.StandardOutput.ReadToEnd()
-                        $stderr = $process.StandardError.ReadToEnd()
-
-                        $process.WaitForExit()
-
-                        if ($stdout) {
-                            Write-Host $stdout
-                        }
-
-                        if ($process.ExitCode -ne 0) {
-                            Write-Host $stderr
-                            throw "Docker login failed"
-                        }
-
-                        Write-Host "Docker login successful!"
-
-                        docker push "$env:IMAGE_NAME`:$env:IMAGE_TAG"
-
-                        if ($LASTEXITCODE -ne 0) {
-                            throw "Docker push failed"
-                        }
-
-                        Write-Host "Docker image pushed successfully!"
-                    '''
+                    Write-Host "Docker image pushed successfully!"
                 }
-            }
+                finally {
+                    if (Test-Path $tokenFile) {
+                        Remove-Item $tokenFile -Force
+                    }
+                }
+            '''
         }
+    }
+}
 
         stage('Deploy to Kubernetes') {
             steps {
