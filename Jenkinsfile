@@ -49,7 +49,8 @@ pipeline {
                         if ([string]::IsNullOrWhiteSpace($env:DOCKER_TOKEN)) {
                             throw "Docker token is empty"
                         }
-
+Write-Host "Docker username: [$env:DOCKER_USER]"
+Write-Host "Docker token length: $($env:DOCKER_TOKEN.Length)"
                         $env:DOCKER_TOKEN | docker login --username $env:DOCKER_USER --password-stdin
 
                         if ($LASTEXITCODE -ne 0) {
