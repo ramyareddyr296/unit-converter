@@ -42,10 +42,6 @@ pipeline {
                     powershell '''
                         $ErrorActionPreference = "Stop"
 
-                        Write-Host "Checking Docker credentials..."
-                        Write-Host "Docker username: $env:DOCKER_USER"
-                        Write-Host "Docker token length: $($env:DOCKER_TOKEN.Length)"
-
                         if ([string]::IsNullOrWhiteSpace($env:DOCKER_USER)) {
                             throw "Docker username is empty"
                         }
@@ -54,16 +50,13 @@ pipeline {
                             throw "Docker token is empty"
                         }
 
-                        $env:DOCKER_TOKEN |
-                            docker login --username $env:DOCKER_USER --password-stdin
+                        $env:DOCKER_TOKEN | docker login --username $env:DOCKER_USER --password-stdin
 
                         if ($LASTEXITCODE -ne 0) {
                             throw "Docker login failed"
                         }
 
-                        Write-Host "Docker login successful!"
-
-                        docker push "${env:IMAGE_NAME}:${env:IMAGE_TAG}"
+                        docker push "$env:IMAGE_NAME`:$env:IMAGE_TAG"
 
                         if ($LASTEXITCODE -ne 0) {
                             throw "Docker push failed"
@@ -80,12 +73,14 @@ pipeline {
                 powershell '''
                     $ErrorActionPreference = "Stop"
 
+                    $image = "$env:IMAGE_NAME`:$env:IMAGE_TAG"
+
                     $manifest = Get-Content deployment.yaml -Raw
 
                     $manifest = [regex]::Replace(
                         $manifest,
-                        '(?m)^(\s*image:\s*)ramyareddy120/unit-converter:\S+',
-                        ('$1' + "${env:IMAGE_NAME}:${env:IMAGE_TAG}")
+                        '(?m)^(\\s*image:\\s*)ramyareddy120/unit-converter:\\S+',
+                        ('$1' + $image)
                     )
 
                     Set-Content -Path deployment-build.yaml -Value $manifest
